@@ -2,13 +2,15 @@ import os, sqlite3, zipfile, subprocess, signal, shutil, psutil, time, datetime
 from flask import Flask, render_template, request, redirect, url_for, session, jsonify, send_from_directory, send_file
 from werkzeug.utils import secure_filename
 from flask_socketio import SocketIO, emit
+import eventlet
+eventlet.monkey_patch()
 
 # Global process tracker
 running_procs = {}
 start_times = {}
 
 # Initialize SocketIO
-socketio = SocketIO()
+socketio = SocketIO(cors_allowed_origins="*", async_mode='eventlet')
 
 def get_db():
     db_path = os.path.join(os.getcwd(), 'storage/nehost.db')
@@ -55,7 +57,7 @@ def init_db():
 
 def create_app():
     app = Flask(__name__)
-    app.config['SECRET_KEY'] = 'nehost_ultra_pro_max_99'
+    app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'nehost_ultra_pro_max_99')
     app.config['BASE_STORAGE'] = os.path.join(os.getcwd(), 'storage/instances')
     app.config['UPLOAD_FOLDER'] = os.path.join(os.getcwd(), 'static/uploads')
     
@@ -65,7 +67,7 @@ def create_app():
         os.makedirs(app.config['UPLOAD_FOLDER'])
         
     init_db()
-    socketio.init_app(app)
+    socketio.init_app(app, cors_allowed_origins="*")
 
     def get_precise_uptime(start_timestamp):
         if not start_timestamp: return "Offline"
@@ -610,7 +612,12 @@ def create_app():
 
     return app
 
+# Create app instance
 app = create_app()
 
+# This is the important fix for Render
 if __name__ == "__main__":
-    socketio.run(app, host='0.0.0.0', port=5000, debug=True)
+    # Get port from environment variable (Render sets this)
+    port = int(os.environ.get('PORT', 5000))
+    # Use eventlet with proper production settings
+    socketio.run(app, host='0.0.0.0', port=port, debug=False)
